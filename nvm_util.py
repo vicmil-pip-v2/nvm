@@ -9,18 +9,20 @@ def get_directory_path(__file__in, up_directories=0):
     return str(pathlib.Path(__file__in).parents[up_directories].resolve()).replace("\\", "/")
 
 class LocalNodeReact:
-    def __init__(self, project_dir=None, node_version="18.16.0", build_dir="build"):
-        self.project_dir = os.path.abspath(project_dir or ".")
+    def __init__(self, parent_dir: str, build_dir: str, node_version="18.16.0", project_name:str = "my-app"):
+        self.parent_dir = os.path.abspath(parent_dir)
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.nvm_dir = os.path.join(self.script_dir, "nvm")
         self.node_version = node_version
-        self.build_dir = os.path.join(self.project_dir, build_dir)
+        self.build_dir = build_dir
+        self.project_name = project_name
+        self.project_path = os.path.join(parent_dir, project_name)
 
         self.nvm_sh = os.path.join(self.nvm_dir, "nvm.sh")
         if not os.path.isfile(self.nvm_sh):
             raise FileNotFoundError(f"nvm.sh not found in {self.nvm_dir}")
 
-        self.package_json = os.path.join(self.project_dir, "package.json")
+        self.package_json = os.path.join(self.project_path, "package.json")
         if os.path.isfile(self.package_json):
             self._detect_project_type()
         else:
@@ -39,7 +41,7 @@ class LocalNodeReact:
         else:
             self.project_type = "unknown"
 
-    def _run_in_nvm_shell(self, commands):
+    def _run_in_nvm_shell(self, commands, dir_path: str):
         """
         Run commands in a shell with local nvm sourced and Node active.
         """
@@ -48,20 +50,20 @@ class LocalNodeReact:
         [ -s "{self.nvm_sh}" ] && . "{self.nvm_sh}"
         nvm install {self.node_version} --no-progress
         nvm use {self.node_version}
-        cd "{self.project_dir}"
+        cd "{dir_path}"
         {commands}
         '''
         return subprocess.run(full_command, shell=True, executable="/bin/bash")
 
     def install_dependencies(self):
         print("Installing npm dependencies...")
-        result = self._run_in_nvm_shell("npm install")
+        result = self._run_in_nvm_shell("npm install", dir_path=self.parent_dir)
         if result.returncode == 0:
             print("Dependencies installed successfully.")
         return result.returncode
 
-    def build_project(self, output_dir=None):
-        output_dir = output_dir or self.build_dir
+    def build_project(self):
+        output_dir = self.build_dir
         print(f"Building React project into: {output_dir}")
 
         # Use correct build command based on project type
@@ -72,7 +74,7 @@ class LocalNodeReact:
         else:
             cmd = f'npm run build'
 
-        result = self._run_in_nvm_shell(cmd)
+        result = self._run_in_nvm_shell(cmd, dir_path=self.project_path)
         if result.returncode == 0:
             print(f"Build completed successfully. Files are in {output_dir}")
         return result.returncode
@@ -88,29 +90,29 @@ class LocalNodeReact:
         else:
             cmd = "npm start"
 
-        result = self._run_in_nvm_shell(cmd)
+        result = self._run_in_nvm_shell(cmd, dir_path=self.project_path)
         return result.returncode
     
-    def create_default_project(self, project_name="my-app", template="cra"):
-        project_path = os.path.join(self.project_dir, project_name)
+    def create_default_project(self, template="cra"):
+        project_path = self.project_path
         if os.path.exists(project_path):
             raise FileExistsError(f"The directory {project_path} already exists.")
 
         if template.lower() == "cra":
-            cmd = f"npx create-react-app {project_name}"
+            cmd = f"npx create-react-app {self.project_name}"
         elif template.lower() == "vite":
-            cmd = f"npm create vite@latest {project_name} -- --template react"
+            cmd = f"npm create vite@latest {self.project_name} -- --template react"
         else:
             raise ValueError("Template must be 'cra' or 'vite'")
 
         print(f"Creating {template.upper()} project at {project_path}...")
-        result = self._run_in_nvm_shell(cmd)
+        result = self._run_in_nvm_shell(cmd, dir_path=self.parent_dir)
         if result.returncode == 0:
-            print(f"Project '{project_name}' created successfully.")
+            print(f"Project '{self.project_name}' created successfully.")
 
             # Update instance to point to new project
             self.project_dir = project_path
-            self.package_json = os.path.join(self.project_dir, "package.json")
+            self.package_json = os.path.join(self.project_path, "package.json")
             self._detect_project_type()
         return result.returncode
 

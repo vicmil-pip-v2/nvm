@@ -9,12 +9,11 @@ def get_directory_path(__file__in, up_directories=0):
     return str(pathlib.Path(__file__in).parents[up_directories].resolve()).replace("\\", "/")
 
 class LocalNodeReact:
-    def __init__(self, parent_dir: str, build_dir: str, node_version="18.16.0", project_name:str = "my-app"):
+    def __init__(self, parent_dir: str, node_version="18.16.0", project_name:str = "my-app"):
         self.parent_dir = os.path.abspath(parent_dir)
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.nvm_dir = os.path.join(self.script_dir, "nvm")
         self.node_version = node_version
-        self.build_dir = build_dir
         self.project_name = project_name
         self.project_path = os.path.join(parent_dir, project_name)
 
@@ -42,6 +41,7 @@ class LocalNodeReact:
             self.project_type = "unknown"
 
     def _run_in_nvm_shell(self, commands, dir_path: str):
+        print(commands)
         """
         Run commands in a shell with local nvm sourced and Node active.
         """
@@ -57,14 +57,14 @@ class LocalNodeReact:
 
     def install_dependencies(self):
         print("Installing npm dependencies...")
-        result = self._run_in_nvm_shell("npm install", dir_path=self.parent_dir)
+        result = self._run_in_nvm_shell("npm install", dir_path=self.project_path)
         if result.returncode == 0:
             print("Dependencies installed successfully.")
         return result.returncode
 
     def build_project(self):
-        output_dir = self.build_dir
-        print(f"Building React project into: {output_dir}")
+        print(f"Building React project")
+        output_dir = self.project_path + "/build"
 
         # Use correct build command based on project type
         if self.project_type == "vite":
@@ -76,7 +76,7 @@ class LocalNodeReact:
 
         result = self._run_in_nvm_shell(cmd, dir_path=self.project_path)
         if result.returncode == 0:
-            print(f"Build completed successfully. Files are in {output_dir}")
+            print(f"Build completed successfully. Files are in {self.project_path}/build")
         return result.returncode
 
     def start_dev_server(self):
